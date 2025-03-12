@@ -19,7 +19,7 @@ This is the server component of the Collaborative Drawing App. It handles real-t
 
 1. Clone the repository:
     ```sh
-    git clone https://github.com/yourusername/collaborative-drawing-app.git
+    git clone https://github.com/karthikraj22/collaborative-drawing-app-server.git
     cd collaborative-drawing-app/server
     ```
 
