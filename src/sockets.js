@@ -5,14 +5,14 @@ let users = {};
 function setupWebSocket(server) {
   const io = new Server(server, {
     cors: {
-      origin: "*", 
+      origin: "*",
     },
   });
 
   io.on("connection", (socket) => {
     console.log(`✅ User connected: ${socket.id}`);
 
-    // 🎯 Handle user joining a room
+    // 🎯 Join Room
     socket.on("joinRoom", ({ username, room }) => {
       const joinTime = new Date().toLocaleTimeString();
       socket.join(room);
@@ -22,103 +22,99 @@ function setupWebSocket(server) {
 
       const roomUsers = Object.values(users).filter((user) => user.room === room);
       io.to(room).emit("userList", roomUsers);
-      console.log("🔄 Updated Users in Room:", roomUsers);
     });
 
+    // 🎨 Drawing
     socket.on("draw", (drawData) => {
       const user = users[socket.id];
-      if (!user) return console.warn(`❌ No user for socket ID: ${socket.id}`);
-      const { room } = user;
-
-      // Broadcast to everyone else in the room except sender
-      socket.to(room).emit("draw", drawData);
-        // console.log(`🎨 Draw data from ${user.username} in room ${room}`, drawData);
+      if (!user) return;
+      socket.to(user.room).emit("draw", drawData);
     });
 
     socket.on("resetCanvas", () => {
       const user = users[socket.id];
-      if (!user) return console.warn(`❌ No user for socket ID: ${socket.id}`);
-      const { room, username } = user;
-
-      console.log(`🧹 ${username} requested canvas reset in room ${room}`);
-
-      // Broadcast resetCanvas event to all clients in the room
-      io.to(room).emit("resetCanvas");
+      if (!user) return;
+      io.to(user.room).emit("resetCanvas");
     });
 
-
-    // 📡 WebRTC signaling events
-    socket.on("sendOffer", (offer) => {
+    // ✅ WebRTC for AUDIO
+    socket.on("audioOffer", (offer) => {
       const user = users[socket.id];
-      if (!user) return console.warn(`❌ No user found for socket ID: ${socket.id}`);
-      const { room, username } = user;
-      console.log(`📨 Offer from ${username} in room ${room}`);
-      socket.to(room).emit("receiveOffer", offer);
+      if (!user) return;
+      console.log(`🎤 Audio offer from ${user.username}`);
+      socket.to(user.room).emit("audioAnswer", offer);
     });
 
-    socket.on("sendAnswer", (answer) => {
+    socket.on("audioIceCandidate", (candidate) => {
       const user = users[socket.id];
-      if (!user) return console.warn(`❌ No user found for socket ID: ${socket.id}`);
-      const { room, username } = user;
-      console.log(`📨 Answer from ${username} in room ${room}`);
-      socket.to(room).emit("receiveAnswer", answer);
+      if (!user) return;
+      console.log(`🎤 Audio ICE from ${user.username}`);
+      socket.to(user.room).emit("audioIceCandidate", candidate);
     });
 
-    socket.on("sendIceCandidate", (candidate) => {
+    // ✅ WebRTC for SCREEN SHARING
+    socket.on("screenOffer", (offer) => {
       const user = users[socket.id];
-      if (!user) return console.warn(`❌ No user found for socket ID: ${socket.id}`);
-      const { room, username } = user;
-      console.log(`📡 ICE candidate from ${username} in room ${room}:`, candidate);
-      socket.to(room).emit("receiveIceCandidate", candidate);
+      if (!user) return;
+      console.log(`🖥️ Screen offer from ${user.username}`);
+      socket.to(user.room).emit("screenAnswer", offer);
     });
 
-    // 💬 Text chat
+    socket.on("screenIceCandidate", (candidate) => {
+      const user = users[socket.id];
+      if (!user) return;
+      console.log(`🖥️ Screen ICE from ${user.username}`);
+      socket.to(user.room).emit("screenIceCandidate", candidate);
+    });
+
+    socket.on("screenShareStopped", () => {
+      const user = users[socket.id];
+      if (!user) return;
+      console.log(`🛑 Screen sharing stopped by ${user.username}`);
+      socket.to(user.room).emit("screenShareStopped");
+    });
+
+    // 💬 Chat
     socket.on("chatMessage", (messageData) => {
       const user = users[socket.id];
-      if (!user) return console.warn(`❌ No user for socket ID: ${socket.id}`);
-      const { room, username } = user;
+      if (!user) return;
 
       const message = {
-        username,
+        username: user.username,
         message: messageData.message,
         type: "text",
         timestamp: new Date().toLocaleTimeString(),
       };
 
-      io.to(room).emit("message", message);
-      console.log("💬 Message sent:", message);
+      io.to(user.room).emit("message", message);
     });
 
-    // 🔊 Audio message
+    // 🔊 Audio Message
     socket.on("audioMessage", (audioData) => {
       const user = users[socket.id];
-      if (!user) return console.warn(`❌ No user for socket ID: ${socket.id}`);
-      const { room, username } = user;
+      if (!user) return;
 
       const message = {
-        username,
+        username: user.username,
         message: audioData.audio,
         type: "audio",
         timestamp: new Date().toLocaleTimeString(),
       };
 
-      io.to(room).emit("message", message);
-      console.log("🔊 Audio message sent:", message);
+      io.to(user.room).emit("message", message);
     });
 
-    // 🔌 User disconnect
+    // ❌ Disconnect
     socket.on("disconnect", () => {
       const user = users[socket.id];
       if (!user) return;
 
       const { room, username } = user;
       console.log(`❌ ${username} disconnected from room: ${room}`);
-
       delete users[socket.id];
 
-      const roomUsers = Object.values(users).filter((user) => user.room === room);
+      const roomUsers = Object.values(users).filter((u) => u.room === room);
       io.to(room).emit("userList", roomUsers);
-      console.log("🔄 Updated Users in Room After Disconnect:", roomUsers);
     });
   });
 
